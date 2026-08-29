@@ -1,0 +1,23 @@
+{
+  "name": "shiftrack",
+  "version": "1.0.0",
+  "description": "ShiftTrack - Monthly Shift Roster & Attendance Matrix (Full Stack)",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "build": "echo 'No build step required - static files served directly'",
+    "build:vercel": "node build-vercel.mjs",
+    "postinstall": "npm run build"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongodb": "^6.8.0"
+  }
+}

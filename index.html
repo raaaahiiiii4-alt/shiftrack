@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShiftTrack - Shift Attendance & Token Roster Management</title>
+    <meta name="description" content="Manage employee token numbers, assign shifts (A, B, C), track attendance, and export monthly matrix reports to Excel.">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
+
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+
+    <!-- SheetJS for Excel (.xlsx) Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Application Script -->
+    <script src="app.js" defer></script>
+</head>
+
+<body>
+    <!-- Background Animated Shapes -->
+    <div class="bg-glow glow-1" aria-hidden="true"></div>
+    <div class="bg-glow glow-2" aria-hidden="true"></div>
+    <div class="bg-glow glow-3" aria-hidden="true"></div>
+
+    <div class="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>ShiftTrack</h1>
+                    <span class="tagline">Monthly Shift Roster & Attendance Matrix</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <div class="mine-selector">
+                    <i class="fa-solid fa-mountain" aria-hidden="true"></i>
+                    <label for="mineSelect" class="sr-only">Select Mine</label>
+                    <select id="mineSelect" class="input-mine" aria-label="Select Mine">
+                        <option value="Balaria">Balaria</option>
+                        <option value="Mochia">Mochia</option>
+                        <option value="Baroi">Baroi</option>
+                    </select>
+                </div>
+
+                <div class="date-selector">
+                    <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                    <label for="shiftDate" class="sr-only">Shift Date</label>
+                    <input type="date" id="shiftDate" class="input-date" aria-label="Select Shift Date">
+                </div>
+                
+                <button type="button" id="demoDataBtn" class="btn btn-secondary" title="Load sample multi-date dataset" aria-label="Load Demo Data">
+                    <i class="fa-solid fa-magic" aria-hidden="true"></i> Load Demo
+                </button>
+
+                <button type="button" id="downloadExcelBtn" class="btn btn-emerald" title="Download single Excel sheet with columns for all dates in the month" aria-label="Download Monthly Excel Sheet">
+                    <i class="fa-solid fa-file-excel" aria-hidden="true"></i> Download Monthly Excel
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Overview Cards -->
+        <section class="stats-grid" id="statsGrid" aria-label="Shift Statistics Overview">
+            <div class="stat-card total-card">
+                <div class="stat-icon"><i class="fa-solid fa-users" aria-hidden="true"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Total Tokens</span>
+                    <h2 class="stat-value" id="statTotal">0</h2>
+                </div>
+            </div>
+
+            <div class="stat-card shift-a-card">
+                <div class="stat-icon"><i class="fa-solid fa-sun" aria-hidden="true"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Shift A (Morning)</span>
+                    <h2 class="stat-value" id="statShiftA">0</h2>
+                </div>
+                <span class="shift-indicator badge-a">Shift A</span>
+            </div>
+
+            <div class="stat-card shift-b-card">
+                <div class="stat-icon"><i class="fa-solid fa-cloud-sun" aria-hidden="true"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Shift B (Evening)</span>
+                    <h2 class="stat-value" id="statShiftB">0</h2>
+                </div>
+                <span class="shift-indicator badge-b">Shift B</span>
+            </div>
+
+            <div class="stat-card shift-c-card">
+                <div class="stat-icon"><i class="fa-solid fa-moon" aria-hidden="true"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Shift C (Night)</span>
+                    <h2 class="stat-value" id="statShiftC">0</h2>
+                </div>
+                <span class="shift-indicator badge-c">Shift C</span>
+            </div>
+
+            <div class="stat-card shift-off-card">
+                <div class="stat-icon"><i class="fa-solid fa-user-slash" aria-hidden="true"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">General / Off</span>
+                    <h2 class="stat-value" id="statShiftOff">0</h2>
+                </div>
+                <span class="shift-indicator badge-off">Off</span>
+            </div>
+        </section>
+
+        <!-- Input & Roster Control Panel -->
+        <main class="content-grid">
+            <!-- Left Side: Token Entry Forms -->
+            <section class="card input-card" aria-label="Add Tokens Panel">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-plus-circle" aria-hidden="true"></i> Add Tokens</h2>
+                    <div class="tabs" role="tablist" aria-label="Token Entry Options">
+                        <button type="button" class="tab-btn active" id="tabBulkBtn" role="tab" aria-selected="true" aria-controls="bulkAddPanel">Bulk Add</button>
+                        <button type="button" class="tab-btn" id="tabSingleBtn" role="tab" aria-selected="false" aria-controls="singleAddPanel">Single Add</button>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Bulk Token Entry Form -->
+                    <form id="bulkAddForm" onsubmit="event.preventDefault();">
+                        <div id="bulkAddPanel" class="tab-panel active" role="tabpanel" aria-labelledby="tabBulkBtn">
+                            <div class="form-group">
+                                <label for="bulkTokensInput">
+                                    Enter Token Numbers <span class="help-text">(Separated by commas, spaces, or newlines)</span>
+                                </label>
+                                <textarea id="bulkTokensInput" rows="5" placeholder="e.g. 1001, 1002, 1003&#10;1004, 1005&#10;TOK-501 TOK-502" class="form-control"></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group flex-1">
+                                    <label for="bulkDefaultShift">Assign Shift</label>
+                                    <select id="bulkDefaultShift" class="form-control">
+                                        <option value="A">Shift A (Morning)</option>
+                                        <option value="B">Shift B (Evening)</option>
+                                        <option value="C">Shift C (Night)</option>
+                                        <option value="OFF">General / Off</option>
+                                    </select>
+                                </div>
+                                <button type="button" id="addBulkBtn" class="btn btn-primary btn-align-end" aria-label="Import Bulk Tokens">
+                                    <i class="fa-solid fa-file-import" aria-hidden="true"></i> Import Tokens
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Single Token Entry Form -->
+                    <form id="singleAddForm" onsubmit="event.preventDefault();">
+                        <div id="singleAddPanel" class="tab-panel" role="tabpanel" aria-labelledby="tabSingleBtn">
+                            <div class="form-row">
+                                <div class="form-group flex-2">
+                                    <label for="singleTokenInput">Token Number / Employee ID</label>
+                                    <input type="text" id="singleTokenInput" placeholder="e.g. TOK-1001" class="form-control">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="singleShiftSelect">Assign Shift</label>
+                                    <select id="singleShiftSelect" class="form-control">
+                                        <option value="A">Shift A</option>
+                                        <option value="B">Shift B</option>
+                                        <option value="C">Shift C</option>
+                                        <option value="OFF">Off</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="button" id="addSingleBtn" class="btn btn-primary full-width" aria-label="Add Single Token">
+                                <i class="fa-solid fa-user-plus" aria-hidden="true"></i> Add Token
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Right Side: Attendance Roster Table -->
+            <section class="card roster-card" aria-label="Attendance Roster">
+                <!-- Roster Toolbar -->
+                <div class="roster-toolbar">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i>
+                        <label for="searchInput" class="sr-only">Search by Token ID</label>
+                        <input type="text" id="searchInput" placeholder="Search by Token ID..." class="form-control search-input" aria-label="Search by Token ID">
+                    </div>
+
+                    <div class="filter-pills" id="filterPills" role="region" aria-label="Filter roster by shift">
+                        <button type="button" class="filter-btn active" data-filter="ALL" aria-pressed="true">All</button>
+                        <button type="button" class="filter-btn" data-filter="A" aria-pressed="false">Shift A</button>
+                        <button type="button" class="filter-btn" data-filter="B" aria-pressed="false">Shift B</button>
+                        <button type="button" class="filter-btn" data-filter="C" aria-pressed="false">Shift C</button>
+                        <button type="button" class="filter-btn" data-filter="OFF" aria-pressed="false">Off</button>
+                    </div>
+                </div>
+
+                <!-- Bulk Action Controls -->
+                <div class="bulk-actions-bar" id="bulkActionsBar" aria-label="Bulk Selection Controls">
+                    <span class="selected-count" id="selectedCountText">0 selected</span>
+                    <div class="bulk-buttons">
+                        <span class="bulk-label">Set Shift:</span>
+                        <button type="button" class="btn btn-xs btn-shift-a" id="bulkShiftABtn" aria-label="Set Shift A for selected">A</button>
+                        <button type="button" class="btn btn-xs btn-shift-b" id="bulkShiftBBtn" aria-label="Set Shift B for selected">B</button>
+                        <button type="button" class="btn btn-xs btn-shift-c" id="bulkShiftCBtn" aria-label="Set Shift C for selected">C</button>
+                        <button type="button" class="btn btn-xs btn-shift-off" id="bulkShiftOffBtn" aria-label="Set Off for selected">Off</button>
+                        <button type="button" class="btn btn-xs btn-danger" id="bulkDeleteBtn" aria-label="Delete selected tokens">
+                            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div class="table-wrapper">
+                    <table class="roster-table" id="rosterTable" aria-label="Attendance Roster Table">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="th-checkbox">
+                                    <input type="checkbox" id="selectAllCheckbox" aria-label="Select all tokens">
+                                </th>
+                                <th scope="col">Sl No.</th>
+                                <th scope="col">Token ID</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Current Shift</th>
+                                <th scope="col">Mark Shift</th>
+                                <th scope="col" class="text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rosterTbody">
+                            <!-- Rows rendered dynamically by app.js -->
+                        </tbody>
+                    </table>
+
+                    <div id="emptyState" class="empty-state">
+                        <div class="empty-icon"><i class="fa-solid fa-clipboard-user" aria-hidden="true"></i></div>
+                        <h3>No Tokens Recorded Yet</h3>
+                        <p>Use the panel on the left or click "Load Demo" to populate tokens and assign shifts.</p>
+                    </div>
+                </div>
+
+                <!-- Footer Summary inside Roster Card -->
+                <div class="roster-footer">
+                    <span id="showingRecordsText">Showing 0 of 0 records</span>
+                    <div class="export-options">
+                        <button type="button" id="clearAllBtn" class="btn btn-text-danger" aria-label="Clear all roster records">
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Clear All
+                        </button>
+                        <button type="button" id="exportCsvBtn" class="btn btn-outline" aria-label="Export Monthly CSV">
+                            <i class="fa-solid fa-file-csv" aria-hidden="true"></i> Export Monthly CSV
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+</body>
+
+</html>
