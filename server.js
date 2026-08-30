@@ -6,10 +6,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3003;
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Ftop:sOk2lxgUReAHGFoA@shifttrack-cluster.9hrq4xi.mongodb.net/shiftrack?retryWrites=true&w=majority';
-const DB_NAME = 'shiftrack';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Ftop:dIpqQbX7lXt4i3iu@shifttrack-cluster.9hrq4xi.mongodb.net/shifttrack?retryWrites=true&w=majority';
+const DB_NAME = 'shifttrack';
 const COLLECTION_NAME = 'tokens';
 
 app.use(cors());
@@ -414,9 +414,10 @@ async function startServer() {
         process.exit(1);
     }
     
-    app.listen(PORT, () => {
-        console.log(`ShiftTrack API server running on http://localhost:${PORT}`);
-    });
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`ShiftTrack API server running on http://localhost:${PORT}`);
+    console.log(`Server listening on port ${PORT}`);
+});
 }
 
 startServer();

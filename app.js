@@ -1,27 +1,25 @@
 /* ==========================================================================
    ShiftTrack - Application Logic & State Management (Monthly Matrix)
-   Backend API Version - Connected to MongoDB Atlas
-   Vercel Frontend Compatible - Configurable API Base URL
+   Backend API Version - Connected to MongoDB Atlas via Express/Mongoose
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- Configuration ---
-    // API_BASE can be set via:
-    // 1. window.__SHIFTTRACK_API_BASE__ (injected at build/deploy time)
-    // 2. VERCEL_ENV auto-detection
-    // 3. Falls back to '/api' for local development (same-origin)
-    const API_BASE = (typeof window !== 'undefined' && window.__SHIFTTRACK_API_BASE__) 
-        ? window.__SHIFTTRACK_API_BASE__ 
-        : '/api';
+    const API_BASE = 'http://127.0.0.1:3000/api';
     
     // --- Application State ---
     let state = {
         tokens: [],
         selectedDate: getTodayDateString(),
-        selectedMine: 'Balaria',
+        selectedMineId: null,
+        selectedMineName: 'Balaria',
         activeFilter: 'ALL',
         searchQuery: '',
-        loading: false
+        loading: false,
+        accessToken: null,
+        refreshToken: null,
+        user: null,
+        mines: []
     };
 
     // --- DOM Elements ---
@@ -70,6 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     async function init() {
         shiftDateInput.value = state.selectedDate;
+        await checkAuth();
+        await loadMines();
         await loadTokens();
         attachEventListeners();
     }
@@ -91,42 +91,216 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Date(year, month, 0).getDate();
     }
 
+    function getMonthLabel(month) {
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return monthNames[month - 1];
+    }
+
+    // --- Auth Functions ---
+    async function checkAuth() {
+        const savedToken = localStorage.getItem('shifttrack_access_token');
+        const savedRefresh = localStorage.getItem('shifttrack_refresh_token');
+        const savedUser = localStorage.getItem('shifttrack_user');
+
+        if (savedToken && savedUser) {
+            state.accessToken = savedToken;
+            state.refreshToken = savedRefresh;
+            state.user = JSON.parse(savedUser);
+            showToast('Welcome back, ' + state.user.name, 'success');
+            return true;
+        }
+        showLoginModal();
+        return false;
+    }
+
+    async function login(email, password) {
+        try {
+            setLoading(true);
+            const response = await fetch(`${API_BASE}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Login failed');
+            }
+
+            state.accessToken = data.accessToken;
+            state.refreshToken = data.refreshToken;
+            state.user = data.user;
+
+            localStorage.setItem('shifttrack_access_token', data.accessToken);
+            localStorage.setItem('shifttrack_refresh_token', data.refreshToken);
+            localStorage.setItem('shifttrack_user', JSON.stringify(data.user));
+
+            hideLoginModal();
+            showToast('Login successful', 'success');
+            return true;
+        } catch (error) {
+            showToast(error.message, 'warning');
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function refreshAccessToken() {
+        try {
+            const response = await fetch(`${API_BASE}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken: state.refreshToken })
+            });
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Token refresh failed');
+            }
+
+            state.accessToken = data.accessToken;
+            state.refreshToken = data.refreshToken;
+            localStorage.setItem('shifttrack_access_token', data.accessToken);
+            localStorage.setItem('shifttrack_refresh_token', data.refreshToken);
+            return true;
+        } catch (error) {
+            logout();
+            return false;
+        }
+    }
+
+    function logout() {
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.user = null;
+        localStorage.removeItem('shifttrack_access_token');
+        localStorage.removeItem('shifttrack_refresh_token');
+        localStorage.removeItem('shifttrack_user');
+        showLoginModal();
+    }
+
+    function showLoginModal() {
+        const modal = document.createElement('div');
+        modal.id = 'loginModal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal login-modal">
+                <h2><i class="fa-solid fa-lock"></i> ShiftTrack Login</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" required value="farhankhansmg96@gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" required value="skkIPL@2210">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Login</button>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            await login(email, password);
+        });
+    }
+
+    function hideLoginModal() {
+        const modal = document.getElementById('loginModal');
+        if (modal) modal.remove();
+    }
+
     // --- API Helper Functions ---
     async function apiRequest(endpoint, options = {}) {
-        try {
+        const makeRequest = async (token) => {
             const response = await fetch(`${API_BASE}${endpoint}`, {
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
                     ...options.headers
                 },
                 ...options
             });
-            
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error || data.errors?.[0] || `HTTP ${response.status}`);
+            return response;
+        };
+
+        let response = await makeRequest(state.accessToken);
+        
+        // Handle token expiration
+        if (response.status === 401) {
+            const refreshed = await refreshAccessToken();
+            if (refreshed) {
+                response = await makeRequest(state.accessToken);
+            } else {
+                throw new Error('Session expired. Please login again.');
             }
+        }
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || data.errors?.[0] || `HTTP ${response.status}`);
+        }
+        
+        return data;
+    }
+
+    async function loadMines() {
+        try {
+            const data = await apiRequest('/auth/mines');
+            state.mines = data.mines;
             
-            return data;
+            // Populate mine select
+            mineSelectEl.innerHTML = '';
+            state.mines.forEach(mine => {
+                const option = document.createElement('option');
+                option.value = mine._id;
+                option.textContent = mine.displayName || mine.name;
+                mineSelectEl.appendChild(option);
+            });
+            
+            // Set default mine
+            const balaria = state.mines.find(m => m.name === 'Balaria');
+            if (balaria) {
+                state.selectedMineId = balaria._id;
+                state.selectedMineName = balaria.name;
+                mineSelectEl.value = balaria._id;
+            }
         } catch (error) {
-            console.error(`API Error (${endpoint}):`, error);
-            throw error;
+            console.error('Failed to load mines:', error);
         }
     }
 
     async function loadTokens() {
+        if (!state.selectedMineId) return;
+        
         setLoading(true);
         try {
             const params = new URLSearchParams({
-                date: state.selectedDate,
-                mine: state.selectedMine
+                mineId: state.selectedMineId,
+                date: state.selectedDate
             });
-            if (state.activeFilter !== 'ALL') params.append('filter', state.activeFilter);
-            if (state.searchQuery) params.append('search', state.searchQuery);
+            if (state.activeFilter !== 'ALL') params.append('shift', state.activeFilter);
+            if (state.searchQuery) params.append('tokenNo', state.searchQuery);
             
-            const tokens = await apiRequest(`/tokens?${params.toString()}`);
-            state.tokens = tokens;
+            const data = await apiRequest(`/attendance?${params.toString()}`);
+            
+            // Transform backend format to frontend format
+            state.tokens = data.records.map((record, index) => ({
+                id: record._id,
+                tokenNo: record.tokenNo,
+                date: record.date,
+                shift: record.shift,
+                markedAt: record.markedAt || record.timeOfDay || formatTime(new Date(record.createdAt)),
+                selected: false,
+                workerName: record.workerId?.name || ''
+            }));
+            
             render();
         } catch (error) {
             showToast('Failed to load tokens: ' + error.message, 'warning');
@@ -140,7 +314,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function setLoading(loading) {
         state.loading = loading;
         document.body.style.cursor = loading ? 'wait' : 'default';
-        // Disable buttons during loading
         const buttons = document.querySelectorAll('button:not(.tab-btn):not(.filter-btn)');
         buttons.forEach(btn => btn.disabled = loading);
     }
@@ -157,15 +330,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             setLoading(true);
-            const newToken = await apiRequest('/tokens', {
+            const data = await apiRequest('/attendance', {
                 method: 'POST',
                 body: JSON.stringify({
                     tokenNo: rawToken,
                     date: state.selectedDate,
                     shift: shift,
-                    mine: state.selectedMine
+                    mineId: state.selectedMineId
                 })
             });
+            
+            const newToken = {
+                id: data.record._id,
+                tokenNo: data.record.tokenNo,
+                date: data.record.date,
+                shift: data.record.shift,
+                markedAt: data.record.markedAt || formatTime(),
+                selected: false,
+                workerName: data.record.workerId?.name || ''
+            };
             
             state.tokens.unshift(newToken);
             singleTokenInput.value = '';
@@ -196,28 +379,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             setLoading(true);
-            const result = await apiRequest('/tokens/bulk', {
+            const data = await apiRequest('/attendance/bulk', {
                 method: 'POST',
                 body: JSON.stringify({
                     tokens: tokensArr,
                     shift: defaultShift,
                     date: state.selectedDate,
-                    mine: state.selectedMine
+                    mineId: state.selectedMineId
                 })
             });
 
             bulkTokensInput.value = '';
             
             // Add new tokens to state
-            result.tokens.forEach(t => state.tokens.unshift(t));
+            const newTokens = data.records.map(record => ({
+                id: record._id,
+                tokenNo: record.tokenNo,
+                date: record.date,
+                shift: record.shift,
+                markedAt: record.markedAt || formatTime(),
+                selected: false,
+                workerName: record.workerId?.name || ''
+            }));
             
+            newTokens.forEach(t => state.tokens.unshift(t));
             render();
 
-            if (result.added > 0) {
-                showToast(`Successfully added ${result.added} token(s) to ${state.selectedDate} (Shift ${defaultShift})`, 'success');
+            if (data.created > 0) {
+                showToast(`Successfully added ${data.created} token(s) to ${state.selectedDate} (Shift ${defaultShift})`, 'success');
             }
-            if (result.skipped > 0) {
-                showToast(`Skipped ${result.skipped} duplicate token(s) for ${state.selectedDate}`, 'warning');
+            if (data.skipped > 0) {
+                showToast(`Skipped ${data.skipped} duplicate token(s) for ${state.selectedDate}`, 'warning');
+            }
+            if (data.notFound > 0) {
+                showToast(`${data.notFound} token(s) not found in worker database`, 'warning');
             }
         } catch (error) {
             showToast(error.message, 'warning');
@@ -228,18 +423,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function updateShift(id, newShift) {
         try {
-            const updatedToken = await apiRequest(`/tokens/${id}`, {
+            const data = await apiRequest(`/attendance/${id}`, {
                 method: 'PATCH',
                 body: JSON.stringify({ shift: newShift })
             });
             
             const index = state.tokens.findIndex(t => t.id === id);
             if (index !== -1) {
-                state.tokens[index] = updatedToken;
+                state.tokens[index] = {
+                    ...state.tokens[index],
+                    shift: data.record.shift,
+                    markedAt: data.record.markedAt || formatTime()
+                };
             }
             
             render();
-            showToast(`Token ${updatedToken.tokenNo} updated to Shift ${newShift}`, 'info');
+            showToast(`Token ${data.record.tokenNo} updated to Shift ${newShift}`, 'info');
         } catch (error) {
             showToast(error.message, 'warning');
         }
@@ -252,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm(`Delete token ${token.tokenNo}?`)) return;
 
         try {
-            await apiRequest(`/tokens/${id}`, { method: 'DELETE' });
+            await apiRequest(`/attendance/${id}`, { method: 'DELETE' });
             state.tokens = state.tokens.filter(t => t.id !== id);
             render();
             showToast(`Token ${token.tokenNo} removed`, 'info');
@@ -271,9 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             setLoading(true);
-            // Delete all tokens for current mine (could be scoped to date/mine)
             const ids = state.tokens.map(t => t.id);
-            await apiRequest('/tokens', {
+            await apiRequest('/attendance/bulk', {
                 method: 'DELETE',
                 body: JSON.stringify({ ids })
             });
@@ -311,13 +509,10 @@ document.addEventListener('DOMContentLoaded', () => {
             setLoading(true);
             const ids = selectedTokens.map(t => t.id);
             
-            // Update each token individually (could batch in backend)
-            await Promise.all(ids.map(id => 
-                apiRequest(`/tokens/${id}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ shift })
-                })
-            ));
+            await apiRequest('/attendance/bulk/shift', {
+                method: 'PATCH',
+                body: JSON.stringify({ ids, shift })
+            });
             
             selectedTokens.forEach(t => {
                 t.shift = shift;
@@ -342,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             setLoading(true);
             const ids = selectedTokens.map(t => t.id);
-            await apiRequest('/tokens', {
+            await apiRequest('/attendance/bulk', {
                 method: 'DELETE',
                 body: JSON.stringify({ ids })
             });
@@ -369,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Monthly Matrix Excel (.xlsx) Download Handler ---
     async function downloadExcel() {
-        if (state.tokens.length === 0 && !await hasAnyData()) {
+        if (state.tokens.length === 0) {
             showToast(`No attendance records available to export`, 'warning');
             return;
         }
@@ -377,41 +572,26 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             setLoading(true);
             const [yearStr, monthStr] = state.selectedDate.split('-');
-            const monthLabel = getMonthLabel(parseInt(monthStr));
             
-            // Fetch monthly data from API
-            const response = await fetch(`${API_BASE}/export/monthly?date=${yearStr}-${monthStr}&mine=${state.selectedMine}&format=json`);
+            const response = await fetch(`${API_BASE}/attendance/export/excel?mineId=${state.selectedMineId}&month=${yearStr}-${monthStr}`, {
+                headers: { 'Authorization': `Bearer ${state.accessToken}` }
+            });
             
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.error || 'Failed to export');
             }
             
-            const { data: matrixRows } = await response.json();
+            const blob = await response.blob();
+            const monthLabel = getMonthLabel(parseInt(monthStr));
+            const fileName = `${state.selectedMineName}_${monthLabel}_Attendance.xlsx`;
             
-            // Generate Excel with SheetJS
-            const totalDays = getDaysInMonth(parseInt(yearStr), parseInt(monthStr));
-            
-            const worksheet = XLSX.utils.json_to_sheet(matrixRows);
-
-            const colWidths = [
-                { wch: 8 },  // Sl No
-                { wch: 16 }  // Token Number
-            ];
-            
-            for (let d = 1; d <= totalDays; d++) {
-                colWidths.push({ wch: 8 });
-            }
-            
-            colWidths.push({ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 18 });
-            worksheet['!cols'] = colWidths;
-
-            const workbook = XLSX.utils.book_new();
-            const sheetName = `${state.selectedMine}_${monthLabel}_Attendance`;
-            XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-
-            const fileName = `${state.selectedMine}_${monthLabel}_Attendance.xlsx`;
-            XLSX.writeFile(workbook, fileName);
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
 
             showToast(`Exported monthly matrix to ${fileName}`, 'success');
         } catch (error) {
@@ -422,29 +602,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function hasAnyData() {
-        try {
-            const response = await fetch(`${API_BASE}/export/monthly?date=${state.selectedDate.slice(0,7)}&mine=${state.selectedMine}&format=json`);
-            return response.ok;
-        } catch {
-            return false;
-        }
-    }
-
-    function getMonthLabel(month) {
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        return monthNames[month - 1];
-    }
-
     // --- Monthly CSV Export Handler ---
     async function exportCsv() {
         try {
             setLoading(true);
             const [yearStr, monthStr] = state.selectedDate.split('-');
-            const monthLabel = getMonthLabel(parseInt(monthStr));
             
-            // Fetch CSV from API
-            const response = await fetch(`${API_BASE}/export/monthly?date=${yearStr}-${monthStr}&mine=${state.selectedMine}&format=csv`);
+            const response = await fetch(`${API_BASE}/attendance/export/csv?mineId=${state.selectedMineId}&month=${yearStr}-${monthStr}`, {
+                headers: { 'Authorization': `Bearer ${state.accessToken}` }
+            });
             
             if (!response.ok) {
                 const error = await response.json();
@@ -452,7 +618,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const csvContent = await response.text();
-            const fileName = `${state.selectedMine}_${monthLabel}_Attendance.csv`;
+            const monthLabel = getMonthLabel(parseInt(monthStr));
+            const fileName = `${state.selectedMineName}_${monthLabel}_Attendance.csv`;
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
@@ -525,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" class="row-checkbox" data-id="${t.id}" ${t.selected ? 'checked' : ''} aria-label="Select token ${t.tokenNo}">
                     </td>
                     <td>${idx + 1}</td>
-                    <td><span class="token-badge">${t.tokenNo}</span></td>
+                    <td><span class="token-badge">${t.tokenNo}</span>${t.workerName ? ` <small style="color:var(--text-muted)">(${t.workerName})</small>` : ''}</td>
                     <td>${t.date}</td>
                     <td><span class="shift-indicator ${badgeClass}">${shiftText}</span></td>
                     <td>
@@ -581,8 +748,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Mine Selector Change
         mineSelectEl.addEventListener('change', async (e) => {
-            state.selectedMine = e.target.value;
-            showToast(`Mine switched to ${state.selectedMine}`, 'info');
+            state.selectedMineId = e.target.value;
+            const mine = state.mines.find(m => m._id === state.selectedMineId);
+            state.selectedMineName = mine?.name || 'Balaria';
+            showToast(`Mine switched to ${state.selectedMineName}`, 'info');
             await loadTokens();
         });
 
@@ -590,7 +759,6 @@ document.addEventListener('DOMContentLoaded', () => {
         demoDataBtn.addEventListener('click', async () => {
             try {
                 setLoading(true);
-                // Create demo data via bulk API
                 const [yearStr, monthStr] = state.selectedDate.split('-');
                 const d1 = `${yearStr}-${monthStr}-26`;
                 const d2 = `${yearStr}-${monthStr}-27`;
@@ -624,13 +792,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 for (const [date, tokens] of Object.entries(byDate)) {
-                    await apiRequest('/tokens/bulk', {
+                    await apiRequest('/attendance/bulk', {
                         method: 'POST',
                         body: JSON.stringify({
                             tokens,
-                            shift: 'A', // Will be overridden per token
+                            shift: 'A',
                             date,
-                            mine: state.selectedMine
+                            mineId: state.selectedMineId
                         })
                     });
                 }

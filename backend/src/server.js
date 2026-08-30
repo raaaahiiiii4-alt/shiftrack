@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import connectDB from './config/db.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -12,6 +14,10 @@ import workerRoutes from './routes/workerRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import AuditLog from './models/AuditLog.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 dotenv.config();
 
@@ -40,6 +46,8 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+app.use(express.static(PROJECT_ROOT));
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -55,9 +63,10 @@ app.use(errorHandler);
 const startServer = async () => {
   try {
     await connectDB();
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV}`);
+      console.log(`Listening on 0.0.0.0:${PORT}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
