@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isMineUser(mineId) {
+      return request.auth != null && request.auth.token.mineId == mineId;
+    }
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    match /workers/{mineId}/tokens/{tokenNo} {
+      allow read: if isMineUser(mineId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /attendance/{mineId}/records/{recordId} {
+      allow read: if isMineUser(mineId) || isAdmin();
+      allow create: if isMineUser(mineId)
+                       && request.resource.data.mineId == mineId
+                       && request.resource.data.tokenNo != null
+                       && request.resource.data.date != null
+                       && request.resource.data.shift in ['A','B','C','OFF'];
+      allow update: if isMineUser(mineId)
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['shift', 'markedAt', 'updatedAt']);
+      allow delete: if isAdmin();
+    }
+  }
+}
