@@ -2,12 +2,12 @@
    ShiftTrack - Firebase Version (Raw Number Tokens)
    ========================================================================== */
 
-// ---- Firebase Config (REPLACE WITH YOUR VALUES FROM CONSOLE) ----
+// ---- Firebase Config ----
 const firebaseConfig = {
   apiKey: "AIzaSyD7edWThbHQ5IYUox30vNE51MBluakDdK0",
   authDomain: "shifttrack-prod.firebaseapp.com",
   projectId: "shifttrack-prod",
-  storageBucket: "shifttrack-prod.firebasestorage.app",
+  storageBucket: "shifttrack-prod.appspot.com",
   messagingSenderId: "693024326706",
   appId: "1:693024326706:web:8f62ca93178983bc00682b"
 };
@@ -19,10 +19,13 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc,
          deleteDoc, writeBatch, doc, serverTimestamp, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFunctions, httpsCallable }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app);
 
 // ---- State ----
 let state = {
@@ -46,6 +49,7 @@ const mineSelectEl = document.getElementById('mineSelect');
 const demoDataBtn = document.getElementById('demoDataBtn');
 const downloadExcelBtn = document.getElementById('downloadExcelBtn');
 const exportCsvBtn = document.getElementById('exportCsvBtn');
+const logoutBtn = document.getElementById('logoutBtn');
 
 const statTotalEl = document.getElementById('statTotal');
 const statShiftAEl = document.getElementById('statShiftA');
@@ -123,10 +127,12 @@ async function initAuth() {
           mineSelectEl.value = state.userMineId;
           mineSelectEl.disabled = true;
         }
+        logoutBtn.style.display = 'inline-flex';
         hideLoginModal();
         await loadWorkers();
         await loadTokens();
       } else {
+        logoutBtn.style.display = 'none';
         showLoginModal();
       }
       resolve();
@@ -196,10 +202,7 @@ function showLoginModal() {
       if (!balariaUid || !mochiaUid || !officeUid) { showToast('All UIDs required', 'warning'); return; }
       try {
         setLoading(true);
-        // Call the callable function
-        const { httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js');
-        const functions = httpsCallable;
-        const setClaims = functions('setCustomClaims');
+        const setClaims = httpsCallable(functions, 'setCustomClaims');
         await setClaims({ uid: balariaUid, mineId: 'balaria' });
         await setClaims({ uid: mochiaUid, mineId: 'mochia' });
         await setClaims({ uid: officeUid, admin: true });
@@ -623,8 +626,7 @@ function attachEventListeners() {
 
   mineSelectEl.addEventListener('change', async (e) => {
     state.selectedMineId = e.target.value;
-    const mine = state.mines?.find(m => m._id === state.selectedMineId) || { name: capitalize(state.selectedMineId) };
-    state.selectedMineName = mine.name || capitalize(state.selectedMineId);
+    state.selectedMineName = capitalize(state.selectedMineId);
     showToast(`Mine switched to ${state.selectedMineName}`, 'info');
     await loadWorkers();
     await loadTokens();
@@ -648,15 +650,17 @@ function attachEventListeners() {
         { tokenNo: '9', date: d3, shift: 'A' }, { tokenNo: '11', date: d3, shift: 'C' },
         { tokenNo: '12', date: d3, shift: 'OFF' }
       ];
-      const byDate = {};
-      demoTokens.forEach(t => { if (!byDate[t.date]) byDate[t.date] = []; byDate[t.date].push(t.tokenNo); });
-      for (const [date, tokens] of Object.entries(byDate)) {
-        await addDoc(collection(db, 'attendance', state.selectedMineId, 'records'), {
-          tokens, shift: 'A', date, mineId: state.selectedMineId,
+      const batch = writeBatch(db);
+      const mineColl = collection(db, 'attendance', state.selectedMineId, 'records');
+      demoTokens.forEach(t => {
+        const ref = doc(mineColl);
+        batch.set(ref, {
+          tokenNo: t.tokenNo, date: t.date, shift: t.shift,
           markedAt: serverTimestamp(), markedBy: state.user.uid,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp()
         });
-      }
+      });
+      await batch.commit();
       await loadTokens();
       showToast('Loaded multi-date demo roster data', 'info');
     } catch (error) { showToast('Failed to load demo data: ' + error.message, 'warning'); }
@@ -666,6 +670,7 @@ function attachEventListeners() {
   downloadExcelBtn.addEventListener('click', downloadExcel);
   exportCsvBtn.addEventListener('click', exportCsv);
   clearAllBtn.addEventListener('click', clearAllTokens);
+  logoutBtn.addEventListener('click', () => { logout(); });
 
   tabBulkBtn.addEventListener('click', () => { tabBulkBtn.classList.add('active'); tabBulkBtn.setAttribute('aria-selected', 'true'); tabSingleBtn.classList.remove('active'); tabSingleBtn.setAttribute('aria-selected', 'false'); bulkAddPanel.classList.add('active'); singleAddPanel.classList.remove('active'); });
   tabSingleBtn.addEventListener('click', () => { tabSingleBtn.classList.add('active'); tabSingleBtn.setAttribute('aria-selected', 'true'); tabBulkBtn.classList.remove('active'); tabBulkBtn.setAttribute('aria-selected', 'false'); singleAddPanel.classList.add('active'); bulkAddPanel.classList.remove('active'); });

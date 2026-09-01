@@ -52,9 +52,8 @@
                     <i class="fa-solid fa-mountain" aria-hidden="true"></i>
                     <label for="mineSelect" class="sr-only">Select Mine</label>
                     <select id="mineSelect" class="input-mine" aria-label="Select Mine">
-                        <option value="Balaria">Balaria</option>
-                        <option value="Mochia">Mochia</option>
-                        <option value="Baroi">Baroi</option>
+                        <option value="balaria">Balaria</option>
+                        <option value="mochia">Mochia</option>
                     </select>
                 </div>
 
@@ -70,6 +69,10 @@
 
                 <button type="button" id="downloadExcelBtn" class="btn btn-emerald" title="Download single Excel sheet with columns for all dates in the month" aria-label="Download Monthly Excel Sheet">
                     <i class="fa-solid fa-file-excel" aria-hidden="true"></i> Download Monthly Excel
+                </button>
+
+                <button type="button" id="logoutBtn" class="btn btn-outline" title="Logout" aria-label="Logout" style="display:none;">
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> Logout
                 </button>
             </div>
         </header>
@@ -141,7 +144,7 @@
                                 <label for="bulkTokensInput">
                                     Enter Token Numbers <span class="help-text">(Separated by commas, spaces, or newlines)</span>
                                 </label>
-                                <textarea id="bulkTokensInput" rows="5" placeholder="e.g. 1001, 1002, 1003&#10;1004, 1005&#10;TOK-501 TOK-502" class="form-control"></textarea>
+                                <textarea id="bulkTokensInput" rows="5" placeholder="e.g. 2, 4, 5&#10;7, 9, 11&#10;12 15 19" class="form-control"></textarea>
                             </div>
                             <div class="form-row">
                                 <div class="form-group flex-1">
@@ -166,7 +169,7 @@
                             <div class="form-row">
                                 <div class="form-group flex-2">
                                     <label for="singleTokenInput">Token Number / Employee ID</label>
-                                    <input type="text" id="singleTokenInput" placeholder="e.g. TOK-1001" class="form-control">
+                                    <input type="text" id="singleTokenInput" placeholder="e.g. 2" class="form-control">
                                 </div>
                                 <div class="form-group flex-1">
                                     <label for="singleShiftSelect">Assign Shift</label>
