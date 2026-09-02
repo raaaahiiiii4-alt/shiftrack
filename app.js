@@ -6,7 +6,7 @@ import { initAuth, login, logout, getUserState, onAuthChange, setupLoginForm } f
 import { loadWorkers, getWorkerName, clearCache } from './modules/workers.js';
 import { loadDailyRoster, addSingle, addBulk, updateShift, deleteSingle, deleteBulk, clearMineData } from './modules/attendance.js';
 import { generateMonthlyMatrix, downloadExcel, downloadCSV } from './modules/export.js';
-import { renderRoster, updateStats, showToast, setLoading, bindEvents, updateMineSelector, hideModal } from './modules/ui.js';
+import { renderRoster, updateStats, showToast, setLoading, bindEvents, updateMineSelector, updateDateSelector, hideModal } from './modules/ui.js';
 import { dateUtils, helpers, validators } from './modules/utils.js';
 
 let state = {
@@ -38,6 +38,7 @@ function handleAuthChange(userState) {
     state.selectedMineId = userState.mineId || 'balaria';
     state.selectedMineName = helpers.capitalize(state.selectedMineId);
     updateMineSelector(state.selectedMineId, userState.isAdmin, state.selectedMineName);
+    updateDateSelector(userState.isAdmin);
     initializeMine();
   }
 }

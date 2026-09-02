@@ -16,12 +16,12 @@ service cloud.firestore {
 
     match /attendance/{mineId}/records/{recordId} {
       allow read: if isMineUser(mineId) || isAdmin();
-      allow create: if isMineUser(mineId)
+      allow create: if (isMineUser(mineId) || isAdmin())
                        && request.resource.data.mineId == mineId
                        && request.resource.data.tokenNo != null
                        && request.resource.data.date != null
                        && request.resource.data.shift in ['A','B','C','OFF'];
-      allow update: if isMineUser(mineId)
+      allow update: if (isMineUser(mineId) || isAdmin())
                        && request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['shift', 'markedAt', 'updatedAt']);
       allow delete: if isAdmin();

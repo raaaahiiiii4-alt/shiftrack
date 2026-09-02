@@ -278,6 +278,17 @@ export function updateMineSelector(mineId, isAdmin, mineName) {
     mineSelectEl.value = mineId;
     mineSelectEl.disabled = !isAdmin;
   }
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  if (clearAllBtn) {
+    clearAllBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+  }
+}
+
+export function updateDateSelector(isAdmin) {
+  const shiftDateInput = document.getElementById('shiftDate');
+  if (shiftDateInput) {
+    shiftDateInput.disabled = !isAdmin;
+  }
 }
 
 export function setupLoginForm(onLogin, onSetClaims) {
