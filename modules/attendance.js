@@ -32,8 +32,15 @@ export async function loadDailyRoster(mineId, date) {
     where('date', '==', date),
     orderBy('tokenNo')
   );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => buildTokenRecord(d, mineId));
+  try {
+    const snap = await getDocs(q);
+    return snap.docs.map(d => buildTokenRecord(d, mineId));
+  } catch (error) {
+    if (error.code === 'failed-precondition' && error.message.includes('index')) {
+      throw new Error('Firestore index required. Create composite index on (date, tokenNo) for attendance records.');
+    }
+    throw error;
+  }
 }
 
 export async function addSingle(mineId, date, tokenNo, shift) {
