@@ -84,18 +84,18 @@ export function logout() {
 }
 
 function showLoginModal() {
-  const lastEmail = localStorage.getItem('lastEmail') || 'akom@test.com';
+  const lastEmail = localStorage.getItem('lastEmail') || '';
   const content = `
     <div class="modal login-modal">
       <h2><i class="fa-solid fa-lock"></i> ShiftTrack Login</h2>
       <form id="loginForm">
         <div class="form-group">
           <label for="loginEmail">Email</label>
-          <input type="email" id="loginEmail" required value="${lastEmail}" class="form-control" autocomplete="email">
+          <input type="email" id="loginEmail" required value="${lastEmail}" class="form-control" autocomplete="email" placeholder="Enter your email">
         </div>
         <div class="form-group">
           <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" required value="Fa1881an#" class="form-control" autocomplete="current-password">
+          <input type="password" id="loginPassword" required class="form-control" autocomplete="current-password" placeholder="Enter your password">
         </div>
         <button type="submit" class="btn btn-primary btn-full">Login</button>
       </form>
@@ -113,9 +113,9 @@ function renderAdminPanel() {
     <div class="admin-panel" style="padding:1rem;background:var(--bg-tertiary);border-radius:8px;">
       <h4><i class="fa-solid fa-user-shield"></i> Admin: Set Custom Claims</h4>
       <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">Enter UIDs to set mine isolation.</p>
-      <div class="form-group"><label>Balaria UID</label><input type="text" id="claimBalaria" class="form-control" placeholder="yD82roieZ1SenZ23Fpk53yI2S9H2"></div>
-      <div class="form-group"><label>Mochia UID</label><input type="text" id="claimMochia" class="form-control" placeholder="tpQjQILOWKaG99ObhxGJdViy7Cx2"></div>
-      <div class="form-group"><label>Office UID</label><input type="text" id="claimOffice" class="form-control" placeholder="7443xhlAYhaH4SpsNvQMIUkIs5O2"></div>
+      <div class="form-group"><label>Balaria UID</label><input type="text" id="claimBalaria" class="form-control" placeholder="Enter UID for Balaria operator"></div>
+      <div class="form-group"><label>Mochia UID</label><input type="text" id="claimMochia" class="form-control" placeholder="Enter UID for Mochia operator"></div>
+      <div class="form-group"><label>Office Admin UID</label><input type="text" id="claimOffice" class="form-control" placeholder="Enter UID for office admin"></div>
       <button type="button" id="setClaimsBtn" class="btn btn-emerald btn-full" style="margin-top:0.5rem;"><i class="fa-solid fa-key"></i> Set Claims</button>
     </div>
   `;
