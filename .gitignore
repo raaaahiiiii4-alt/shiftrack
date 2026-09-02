@@ -12,6 +12,7 @@ package-lock.json
 .env.local
 .env.production.local
 .env.development.local
+service-account.json
 
 # IDE
 .vscode/
