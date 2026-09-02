@@ -43,24 +43,25 @@ export async function addSingle(mineId, date, tokenNo, shift) {
     showToast(`Token ${tokenNo} not in worker database`, 'warning');
   }
 
-  const newDoc = await runTransaction(db, async (transaction) => {
-    const q = query(getMineColl(mineId), where('tokenNo', '==', tokenNo), where('date', '==', date), limit(1));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      throw new Error(`Token ${tokenNo} already exists for ${date}`);
-    }
-    const ref = doc(getMineColl(mineId));
-    transaction.set(ref, {
-      tokenNo,
-      date,
-      shift,
-      markedAt: serverTimestamp(),
-      markedBy: userState.user?.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+const newDoc = await runTransaction(db, async (transaction) => {
+      const q = query(getMineColl(mineId), where('tokenNo', '==', tokenNo), where('date', '==', date), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        throw new Error(`Token ${tokenNo} already exists for ${date}`);
+      }
+      const ref = doc(getMineColl(mineId));
+      transaction.set(ref, {
+        tokenNo,
+        date,
+        shift,
+        mineId,
+        markedAt: serverTimestamp(),
+        markedBy: userState.user?.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return ref;
     });
-    return ref;
-  });
 
   return buildTokenRecord({ id: newDoc.id, data: () => ({ tokenNo, date, shift, markedAt: new Date(), markedBy: userState.user?.uid }) }, mineId);
 }
@@ -87,16 +88,17 @@ export async function addBulk(mineId, date, tokens, shift) {
     const validation = validateToken(mineId, tokenNo);
     if (!validation.valid) results.notFound++;
 
-    const ref = doc(mineColl);
-    batch.set(ref, {
-      tokenNo,
-      date,
-      shift,
-      markedAt: serverTimestamp(),
-      markedBy: userState.user?.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+const ref = doc(mineColl);
+      batch.set(ref, {
+        tokenNo,
+        date,
+        shift,
+        mineId,
+        markedAt: serverTimestamp(),
+        markedBy: userState.user?.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
     results.created++;
   }
 
