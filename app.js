@@ -209,7 +209,9 @@ function createEventHandlers() {
       try {
         setLoading(true);
         const record = await addSingle(state.selectedMineId, state.selectedDate, raw, shift);
-        state.tokens.unshift({ ...record, selected: false });
+        // Optimistic update with worker name
+        const workerName = getWorkerName(state.selectedMineId, raw) || '';
+        state.tokens.unshift({ ...record, selected: false, workerName });
         tokenInput.value = '';
         render();
         showToast(`Token ${raw} added (Shift ${shift})`, 'success');
@@ -233,7 +235,26 @@ function createEventHandlers() {
         setLoading(true);
         const results = await addBulk(state.selectedMineId, state.selectedDate, tokensArr, defaultShift);
         document.getElementById('bulkTokensInput').value = '';
-        await loadRoster();
+        
+        // Optimistic update - add new tokens to state immediately
+        if (results.created > 0) {
+          const newTokens = tokensArr.slice(0, results.created).map((tokenNo, idx) => ({
+            id: `temp-${Date.now()}-${idx}`,
+            tokenNo,
+            date: state.selectedDate,
+            shift: defaultShift,
+            markedAt: new Date(),
+            markedBy: getUserState().user?.uid,
+            workerName: getWorkerName(state.selectedMineId, tokenNo) || '',
+            selected: false
+          }));
+          state.tokens.unshift(...newTokens);
+          render();
+        }
+        
+        // Refresh from server after 1 second
+        setTimeout(() => loadRoster(), 1000);
+        
         if (results.created) showToast(`Added ${results.created} token(s)`, 'success');
         if (results.skipped) showToast(`Skipped ${results.skipped} duplicates`, 'warning');
         if (results.notFound) showToast(`${results.notFound} tokens not in worker database`, 'warning');
