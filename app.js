@@ -58,12 +58,12 @@ async function loadRoster() {
   if (!state.selectedMineId) return;
   setLoading(true);
   try {
-    state.tokens = await loadDailyRoster(state.selectedMineId, state.selectedDate);
+    const freshTokens = await loadDailyRoster(state.selectedMineId, state.selectedDate);
+    state.tokens = freshTokens;
     render();
   } catch (error) {
     showToast('Failed to load roster: ' + error.message, 'warning');
-    state.tokens = [];
-    render();
+    // DON'T clear state on error - keep optimistic updates visible
   } finally {
     setLoading(false);
   }
@@ -236,7 +236,7 @@ function createEventHandlers() {
         const results = await addBulk(state.selectedMineId, state.selectedDate, tokensArr, defaultShift);
         document.getElementById('bulkTokensInput').value = '';
         
-        // Optimistic update - add new tokens to state immediately
+        // Optimistic update - add new tokens to existing state
         if (results.created > 0) {
           const newTokens = tokensArr.slice(0, results.created).map((tokenNo, idx) => ({
             id: `temp-${Date.now()}-${idx}`,
@@ -248,11 +248,11 @@ function createEventHandlers() {
             workerName: getWorkerName(state.selectedMineId, tokenNo) || '',
             selected: false
           }));
-          state.tokens.unshift(...newTokens);
+          state.tokens = [...newTokens, ...state.tokens];
           render();
         }
         
-        // Refresh from server after 1 second
+        // Refresh from server after 1 second (won't clear on error)
         setTimeout(() => loadRoster(), 1000);
         
         if (results.created) showToast(`Added ${results.created} token(s)`, 'success');
