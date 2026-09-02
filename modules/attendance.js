@@ -148,3 +148,15 @@ export async function clearMineData(mineId) {
   snap.docs.forEach(d => batch.delete(d.ref));
   await batch.commit();
 }
+
+export async function clearDateData(mineId, date) {
+  const userState = getUserState();
+  if (!userState.isAdmin) {
+    throw new Error('Admin only operation');
+  }
+  const q = query(getMineColl(mineId), where('date', '==', date));
+  const snap = await getDocs(q);
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+}

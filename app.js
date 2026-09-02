@@ -4,7 +4,7 @@
 
 import { initAuth, login, logout, getUserState, onAuthChange, setupLoginForm } from './modules/auth.js';
 import { loadWorkers, getWorkerName, clearCache } from './modules/workers.js';
-import { loadDailyRoster, addSingle, addBulk, updateShift, deleteSingle, deleteBulk, clearMineData } from './modules/attendance.js';
+import { loadDailyRoster, addSingle, addBulk, updateShift, deleteSingle, deleteBulk, clearMineData, clearDateData } from './modules/attendance.js';
 import { generateMonthlyMatrix, downloadExcel, downloadCSV } from './modules/export.js';
 import { renderRoster, updateStats, showToast, setLoading, bindEvents, updateMineSelector, updateDateSelector, hideModal } from './modules/ui.js';
 import { dateUtils, helpers, validators } from './modules/utils.js';
@@ -184,13 +184,12 @@ function createEventHandlers() {
     onClearAll: async () => {
       const userState = getUserState();
       if (!userState.isAdmin) { showToast('Admin only', 'warning'); return; }
-      if (!confirm('Clear ALL records for this mine?')) return;
+      if (!confirm(`Clear ALL records for ${state.selectedDate}?`)) return;
       try {
         setLoading(true);
-        await clearMineData(state.selectedMineId);
-        state.tokens = [];
-        render();
-        showToast('All records cleared', 'success');
+        await clearDateData(state.selectedMineId, state.selectedDate);
+        await loadRoster();
+        showToast(`Records for ${state.selectedDate} cleared`, 'success');
       } catch (error) {
         showToast(error.message, 'warning');
       } finally {
